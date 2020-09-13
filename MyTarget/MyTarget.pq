@@ -33,8 +33,6 @@ FuncType =  type function (
 ;
 
 
-
-
 MyTarget.Data=(reportType as text, start as text, end as text)=>
 
 let
@@ -50,8 +48,62 @@ items = result[items],
 #"Развернутый элемент base" = Table.ExpandRecordColumn(#"Развернутый элемент rows1", "base", {"shows", "clicks", "goals", "spent"}, {"shows", "clicks", "goals", "spent"}),
 #"Измененный тип" = Table.TransformColumnTypes(#"Развернутый элемент base",{{"id", type text}, {"date", type date}, {"shows", Int64.Type}, {"clicks", Int64.Type}, {"goals", Int64.Type}}),
 #"Измененный тип с языком" = Table.TransformColumnTypes(#"Измененный тип", {{"spent", type number}}, "en-AU"),
-select = Table.SelectRows(#"Измененный тип с языком", each ([shows] <> 0) or ([clicks] <> 0) or ([goals] <> 0) or ([spent] <> 0)  )
-in try result[error] otherwise select;
+select = Table.SelectRows(#"Измененный тип с языком", each ([shows] <> 0) or ([clicks] <> 0) or ([goals] <> 0) or ([spent] <> 0)  ),
+join = 
+if reportType="campaigns" then Table.Join(select, "id",campaignNames,"campaign_id", JoinKind.LeftOuter ) else
+if reportType="banners" then Table.Join(select, "id",bannerCampaignNames,"banner_id", JoinKind.LeftOuter ) else "Ошибка типа отчёта",
+remove = Table.RemoveColumns(join,{"id"}),
+reorder = try Table.ReorderColumns(remove,{"date", "campaign_id", "campaign_name", "banner_id", "shows", "clicks", "goals", "spent"}) 
+          otherwise  Table.ReorderColumns(remove,{"date", "campaign_id", "campaign_name", "shows", "clicks", "goals", "spent"})
+in try result[error] otherwise reorder;
+
+
+campaignNames = 
+let
+    get=[limit="50"],
+    headers = [#"Authorization"="Bearer "& Extension.CurrentCredential()[Key]],
+    web = Function.InvokeAfter(()=>Web.Contents("https://target.my.com/api/v2/campaigns.json", [Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),#duration(0,0,0,0.3)),
+    result = Json.Document(web),
+    Пользовательский1 = {0..Number.RoundDown(result[count]/50)},
+    #"Преобразовано в таблицу1" = Table.FromList(Пользовательский1, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Переименованные столбцы1" = Table.RenameColumns(#"Преобразовано в таблицу1",{{"Column1", "list"}}),
+    #"Измененный тип1" = Table.TransformColumnTypes(#"Переименованные столбцы1",{{"list", Int64.Type}}),
+    #"Умноженный столбец" = Table.TransformColumns(#"Измененный тип1", {{"list", each _ * 50, type number}}),
+    #"Измененный тип2" = Table.TransformColumnTypes(#"Умноженный столбец",{{"list", type text}}),
+    #"Добавлен пользовательский объект" = Table.AddColumn(#"Измененный тип2", "Пользовательский", each Function.InvokeAfter(()=>Json.Document(Web.Contents("https://target.my.com/api/v2/campaigns.json", [Query = get& [offset = [list]], Headers = headers, ManualStatusHandling = {404, 400}]))[items],#duration(0,0,0,0.2))),
+    #"Развернутый элемент Пользовательский" = Table.ExpandListColumn(#"Добавлен пользовательский объект", "Пользовательский"),
+    #"Развернутый элемент Пользовательский1" = Table.ExpandRecordColumn(#"Развернутый элемент Пользовательский", "Пользовательский", {"id", "name"}, {"id", "name"}),
+    #"Измененный тип" = Table.TransformColumnTypes(#"Развернутый элемент Пользовательский1",{{"id", type text}, {"name", type text}}),
+    #"Переименованные столбцы" = Table.RenameColumns(#"Измененный тип",{{"id", "campaign_id"}, {"name", "campaign_name"}}),
+    #"Удаленные столбцы" = Table.RemoveColumns(#"Переименованные столбцы",{"list"}),
+    distinct=Table.Distinct(#"Удаленные столбцы", {"campaign_id"})
+in
+    distinct;
+
+
+
+bannerCampaignNames= 
+let
+    get=[limit="50"],
+    headers = [#"Authorization"="Bearer "&Extension.CurrentCredential()[Key] ],
+    web = Function.InvokeAfter(()=>Web.Contents("https://target.my.com/api/v2/banners.json", [Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),#duration(0,0,0,0.3)),
+    result = Json.Document(web),
+    Пользовательский1 = {0..Number.RoundDown(result[count]/50)},
+    #"Преобразовано в таблицу1" = Table.FromList(Пользовательский1, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+    #"Переименованные столбцы1" = Table.RenameColumns(#"Преобразовано в таблицу1",{{"Column1", "list"}}),
+    #"Измененный тип1" = Table.TransformColumnTypes(#"Переименованные столбцы1",{{"list", Int64.Type}}),
+    #"Умноженный столбец" = Table.TransformColumns(#"Измененный тип1", {{"list", each _ * 50, type number}}),
+    #"Измененный тип2" = Table.TransformColumnTypes(#"Умноженный столбец",{{"list", type text}}),
+    #"Добавлен пользовательский объект" = Table.AddColumn(#"Измененный тип2", "Column1", each Function.InvokeAfter(()=>Json.Document(Web.Contents("https://target.my.com/api/v2/banners.json", [Query = get& [offset = [list]], Headers = headers, ManualStatusHandling = {404, 400}]))[items],#duration(0,0,0,0.2))),
+    #"Развернутый элемент Пользовательский" = Table.ExpandListColumn(#"Добавлен пользовательский объект", "Column1"),
+    #"Развернутый элемент Column1" = Table.ExpandRecordColumn(#"Развернутый элемент Пользовательский" , "Column1", {"campaign_id", "id"}, {"campaign_id", "id"}),
+    #"Измененный тип" = Table.TransformColumnTypes(#"Развернутый элемент Column1",{{"id", type text}, {"campaign_id", type text}}),
+    #"Переименованные столбцы" = Table.RenameColumns(#"Измененный тип",{{"id", "banner_id"}, {"campaign_id", "id"}}),
+    #"Объединенные запросы" = Table.Join(#"Переименованные столбцы", {"id"},campaignNames, {"campaign_id"},  JoinKind.LeftOuter),
+    #"Удаленные столбцы" = Table.RemoveColumns(#"Объединенные запросы",{"id", "list"}),
+    distinct=Table.Distinct(#"Удаленные столбцы", {"banner_id"})
+in
+    distinct;
 
 
 

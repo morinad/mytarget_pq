@@ -9,7 +9,7 @@ FuncType = type function (
     getToken as (type text meta [
         Documentation.FieldCaption = "Operation:",
         Documentation.FieldDescription = "",
-        Documentation.AllowedValues = {"Get","Refresh"}
+        Documentation.AllowedValues = {"Get","Refresh","Get for Agency"}
     ]),
      client_id as (type text meta [
         Documentation.FieldCaption = "Client ID:",
@@ -25,6 +25,11 @@ FuncType = type function (
         Documentation.FieldCaption = "Refresh token:",
         Documentation.FieldDescription = "",
         Documentation.SampleValues = {"u1y5M7h9lbaFdw1elf8nzK6drPqXbcOmkmOjrn0qxR2gUCNgJe9"}
+    ]),
+    clientName as (type nullable text meta [
+        Documentation.FieldCaption = "Agency Client Name:",
+        Documentation.FieldDescription = "",
+        Documentation.SampleValues = {"client_name"}
     ])
     )
     as table meta [
@@ -41,14 +46,19 @@ FuncType = type function (
 
 
 
-GetTokenMT.Func =(getToken as text, client_id as text, client_secret as text, refreshMT as nullable text)=>
+GetTokenMT.Func =(getToken as text, client_id as text, client_secret as text, refreshMT as nullable text, clientName as nullable text)=>
 let
+agencyClientName = if clientName=null then "" else "agency_client_name="&clientName,
 refresh = if refreshMT=null then "" else refreshMT,
-tok = if getToken = "Get" then "grant_type=client_credentials" else "grant_type=refresh_token&refresh_token="&refresh,
+tok = 
+    if getToken = "Get" then "grant_type=client_credentials" 
+    else if getToken = "Get for Agency" then "grant_type=agency_client_credentials&"&agencyClientName
+    else "grant_type=refresh_token&refresh_token="&refresh,
+
 data = Text.ToBinary(tok&"&client_id="&client_id&"&client_secret="&client_secret&"&permanent=true"),
 headers = [#"Content-Type"="application/x-www-form-urlencoded"],
 web = try Json.Document(Web.Contents(" https://target.my.com/api/v2/oauth2/token.json", [Content = data, Headers = headers, ManualStatusHandling = {404, 400}])) otherwise "Что-то пошло не так("
-in     web;
+in     data;
 
 
 

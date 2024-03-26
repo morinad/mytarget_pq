@@ -57,7 +57,7 @@ tok =
 
 data = Text.ToBinary(tok&"&client_id="&client_id&"&client_secret="&client_secret&"&permanent=true"),
 headers = [#"Content-Type"="application/x-www-form-urlencoded"],
-web = try Json.Document(Web.Contents(" https://target.my.com/api/v2/oauth2/token.json", [Content = data, Headers = headers, ManualStatusHandling = {404, 400}])) otherwise "Что-то пошло не так("
+web = try Json.Document(Web.Contents(" https://ads.vk.com/api/v2/oauth2/token.json", [Content = data, Headers = headers, ManualStatusHandling = {404, 400}])) otherwise "Что-то пошло не так("
 in     web;
 
 

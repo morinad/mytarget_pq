@@ -2,6 +2,7 @@
 section MyTarget;
 
 [DataSource.Kind="MyTarget", Publish="MyTarget.Publish"]
+
 shared MyTarget.Stat =  Value.ReplaceType(MyTarget.Data, FuncType);
 
 
@@ -36,33 +37,42 @@ FuncType =  type function (
 MyTarget.Data=(reportType as text, start as text, end as text)=>
 
 let
-get = [#"date_from"=dateFunc(start), #"date_to"=dateFunc(end), #"metrics"="base"],
+get = [#"date_from"=dateFunc(start), #"date_to"=dateFunc(end), #"metrics"="all"],
 headers = [#"Authorization"="Bearer "&Extension.CurrentCredential()[Key]],
-web = Web.Contents("https://target.my.com/api/v2/statistics/"& reportType &"/day.json", [Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),
+web = Web.Contents("https://ads.vk.com/api/v2/statistics/", [RelativePath = reportType &"/day.json", Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),
 result = Json.Document(web),
 items = result[items],
 #"Преобразовано в таблицу" = Table.FromList(items, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
+
+
 #"Развернутый элемент Column1" = Table.ExpandRecordColumn(#"Преобразовано в таблицу", "Column1", {"id", "rows"}, {"id", "rows"}),
 #"Развернутый элемент rows" = Table.ExpandListColumn(#"Развернутый элемент Column1", "rows"),
-#"Развернутый элемент rows1" = Table.ExpandRecordColumn(#"Развернутый элемент rows", "rows", {"date", "base"}, {"date", "base"}),
+#"Развернутый элемент rows1" = Table.ExpandRecordColumn(#"Развернутый элемент rows", "rows", {"date", "base", "uniques","video"}, {"date", "base", "uniques","video"}),
+
 #"Развернутый элемент base" = Table.ExpandRecordColumn(#"Развернутый элемент rows1", "base", {"shows", "clicks", "goals", "spent"}, {"shows", "clicks", "goals", "spent"}),
-#"Измененный тип" = Table.TransformColumnTypes(#"Развернутый элемент base",{{"id", type text}, {"date", type date}, {"shows", Int64.Type}, {"clicks", Int64.Type}, {"goals", Int64.Type}}),
+#"Развернутый элемент base2" = Table.ExpandRecordColumn(#"Развернутый элемент base", "uniques", {"reach", "frequency"}, {"reach", "frequency"}),
+#"Развернутый элемент base3" = Table.ExpandRecordColumn(#"Развернутый элемент base2", "video", {"started", "paused"}, {"started", "paused"}),
+
+#"Измененный тип" = Table.TransformColumnTypes(#"Развернутый элемент base3",{{"id", type text}, {"date", type date}, {"shows", Int64.Type},  {"started", Int64.Type},  {"paused", Int64.Type}, {"reach", Int64.Type}, {"frequency", type number}, {"clicks", Int64.Type}, {"goals", Int64.Type}}),
+
 #"Измененный тип с языком" = Table.TransformColumnTypes(#"Измененный тип", {{"spent", type number}}, "en-AU"),
 select = Table.SelectRows(#"Измененный тип с языком", each ([shows] <> 0) or ([clicks] <> 0) or ([goals] <> 0) or ([spent] <> 0)  ),
+
 join = 
 if reportType="campaigns" then Table.Join(select, "id",campaignNames,"campaign_id", JoinKind.LeftOuter ) else
 if reportType="banners" then Table.Join(select, "id",bannerCampaignNames,"banner_id", JoinKind.LeftOuter ) else "Ошибка типа отчёта",
 remove = Table.RemoveColumns(join,{"id"}),
-reorder = try Table.ReorderColumns(remove,{"date", "campaign_id", "campaign_name", "banner_id", "shows", "clicks", "goals", "spent"}) 
-          otherwise  Table.ReorderColumns(remove,{"date", "campaign_id", "campaign_name", "shows", "clicks", "goals", "spent"})
+reorder = try Table.ReorderColumns(remove,{"date", "campaign_id", "campaign_name", "banner_id", "shows", "clicks", "goals", "spent", "reach","frequency","started","paused"}) 
+          otherwise  Table.ReorderColumns(remove,{"date", "campaign_id", "campaign_name", "shows", "clicks", "goals", "spent", "reach","frequency","started","paused"})
 in try result[error] otherwise reorder;
+
 
 
 campaignNames = 
 let
     get=[limit="50"],
     headers = [#"Authorization"="Bearer "& Extension.CurrentCredential()[Key]],
-    web = Function.InvokeAfter(()=>Web.Contents("https://target.my.com/api/v2/campaigns.json", [Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),#duration(0,0,0,0.3)),
+    web = Function.InvokeAfter(()=>Web.Contents("https://ads.vk.com/api/v2/campaigns.json", [Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),#duration(0,0,0,0.3)),
     result = Json.Document(web),
     Пользовательский1 = {0..Number.RoundDown(result[count]/50)},
     #"Преобразовано в таблицу1" = Table.FromList(Пользовательский1, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
@@ -86,7 +96,7 @@ bannerCampaignNames=
 let
     get=[limit="50"],
     headers = [#"Authorization"="Bearer "&Extension.CurrentCredential()[Key] ],
-    web = Function.InvokeAfter(()=>Web.Contents("https://target.my.com/api/v2/banners.json", [Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),#duration(0,0,0,0.3)),
+    web = Function.InvokeAfter(()=>Web.Contents("https://ads.vk.com/api/v2/banners.json", [Query = get, Headers = headers, ManualStatusHandling = {404, 400}]),#duration(0,0,0,0.3)),
     result = Json.Document(web),
     Пользовательский1 = {0..Number.RoundDown(result[count]/50)},
     #"Преобразовано в таблицу1" = Table.FromList(Пользовательский1, Splitter.SplitByNothing(), null, null, ExtraValues.Error),
@@ -139,6 +149,7 @@ MyTarget.Publish = [
     SourceImage = MyTarget.Icons,
     SourceTypeImage = MyTarget.Icons
 ];
+
 
 MyTarget.Icons = [
     Icon16 = { Extension.Contents("MyTarget16.png"), Extension.Contents("MyTarget20.png"), Extension.Contents("MyTarget24.png"), Extension.Contents("MyTarget32.png") },

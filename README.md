@@ -1,4 +1,4 @@
-# Кастомный коннектор к MyTarget для Power BI
+# Кастомный коннектор к VKреклама для Power BI
 
 ### Новые видео, статьи и полезности в Telegram-канале: https://t.me/+2kqVrjV5aXs0NTRi
 
